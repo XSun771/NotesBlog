@@ -5,7 +5,7 @@
 # Site
 title: '石沉溪洞'
 subtitle: ''
-description: ''
+description: '朝九晚五的悠然生活很美好，让我向往。'
 keywords:
 author: 'Sun, Xaiver'
 language: 'zh-CN'
@@ -97,7 +97,8 @@ ignore:
 # Extensions
 ## Plugins: https://hexo.io/plugins/
 ## Themes: https://hexo.io/themes/
-theme: landscape
+## theme fluid: https://github.com/fluid-dev/hexo-theme-fluid
+theme: fluid
 
 # Deployment
 ## Docs: https://hexo.io/docs/one-command-deployment
