@@ -371,3 +371,96 @@ tcp6 0 0 [::]:7500 [::]:* LISTEN 21494/java
 所以接下来要对 21494/java 执行 `awk -F/ '{print $1}` ,这里-F手动指定分隔符，-F/的意思就是手动指定/为分隔符，然后输出第一个，也就得到了 PID。
 
 最后是 xargs 命令。为什么这里不能直接 | kill -15 呢？因为kill -15 期待的是一个作为参数的 PID 而不从标准输入里取 PID。而 xargs 的作用正是将自己的标准输入的内容转换为后面的指令的参数。如此搭配，也就最终等价于kill -15 21494了。
+
+# 修改用户密码
+
+使用 root 权限与 `passwd ${username}` 可以修改指定用户登入系统的密码。
+
+使用 `passwd -S` 可以先得到当前系统中所有注册的账户。
+
+# SSH Login
+
+## Enable SSH Password Login via root
+
+Debian 上 SSH 默认是禁止外部通过 SSH 并基于密码校验的方式以 root 账号登进来的。所以我们需要先修改配置使其允许。
+
+不过这一步对于云服务器来说应该是不需要的，我是因为用的 VM 虚拟机上装 Debian，所以要手动配置。云服务商应该提供了在控制台中添加本地SSH秘钥信息后帮助注入买的云服务器中，并默认开启SSH秘钥对验证，使用户可以快速使用SSH登进服务器系统。
+
+可以参考[How To Enable SSH Root Login In Debian 11](https://webmentor.online/blog/how-to-enable-ssh-root-login-in-debian-11)这篇文章。
+
+这样我们就可以用 SSH 软件或者 VS Code 接入我们的系统，方便之后开启使用基于秘钥对的 SSH 验证机制。
+
+`nano /etc/ssh/sshd_config`
+
+在文件中找到包含 PermitRootLogin 的那一行，默认应该是 `#PermitRootLogin prohit-password`。
+
+去掉注释符号，并将第二个参数的值改为 yes，即 `PermitRootLogin yes`。
+
+配置的修改完成后，重启 ssh 服务：`systemctl restart ssh` 以使修改生效。
+
+## Enable SSH key auth login
+
+编辑 `/etc/ssh/sshd_config` 使有如下的配置项：
+
+```
+PubkeyAuthentication yes 
+
+AuthorizedKeysFile     /etc/ssh/authorized_keys .ssh/authorized_keys2
+```
+
+然后在客户端这边的系统上找到这边的公钥，一般是 `~/.ssh/id_{}.pub` 文件的内容。复制之后，写入 `/root/.ssh/authorized_keys` 和 `/root/.ssh/authorized_keys2` 文件中。如果这两个文件还不存在，那就创建出来。这样以后 root 用户即可使用 key auth 登录，因为 `/root` 文件夹是 root 用户的家目录。
+
+完成后仍然是 `systemctl restart ssh` 重启 ssh 服务以使新配置生效。之后这边使用 SSH 客户端即可 SSH Key Auth 登录服务器了。
+
+## SSH 原理
+
+参考了[SSH 认证原理](https://www.jianshu.com/p/d31de2601368)一文。
+
+### 密码验证方式
+
+远程主机收到用户的登录请求，把自己的公钥发给用户。
+
+用户使用这个公钥，将登录密码加密后，发送回来。
+
+远程主机用自己的私钥，解密登录密码，如果密码正确，就同意用户登录。
+
+这个过程本身是安全的，但是实施的时候存在一个风险：如果有人截获了登录请求，然后冒充远程主机，将伪造的公钥发给用户，那么用户很难辨别真伪。因为不像 https 协议，SSH 协议的公钥是没有证书中心（CA）公证的，也就是说，都是自己签发的。
+
+可以设想，如果攻击者插在用户与远程主机之间（比如在公共的 wifi 区域），用伪造的公钥，获取用户的登录密码。再用这个密码登录远程主机，那么 SSH 的安全机制就荡然无存了。这种风险就是著名的中间人攻击。
+
+这也是为什么第一次登录对方主机时系统会出现下面的提示：
+
+```bash
+　　$ ssh user@host
+　　The authenticity of host 'host (12.18.429.21)' can't be established.
+　　RSA key fingerprint is 98:2e:d7:e0:de:9f:ac:67:28:c2:42:2d:37:16:58:4d.
+　　Are you sure you want to continue connecting (yes/no)?
+```
+
+这段话的意思是，无法确认 host 主机的真实性，只知道它的公钥指纹，问你还想继续连接吗？
+
+所谓"公钥指纹"，是指公钥长度较长（这里采用 RSA 算法，长达 1024位），很难比对，所以对其进行 MD5 计算，将它变成一个 128 位的指纹。上例中是 98:2e:d7:e0:de:9f:ac:67:28:c2:42:2d:37:16:58:4d，再进行比较，就容易多了。
+
+很自然的一个问题就是，用户怎么知道远程主机的公钥指纹应该是多少？回答是没有好办法，远程主机必须在自己的网站上贴出公钥指纹，以便用户自行核对。
+
+用户输入 yes 表示认为自己的网络连接是安全的或者比对后认为指纹匹配之后，系统将这一公钥保存在文件 `$HOME/.ssh/known_hosts` 之中并做好与此主机的 IP 的匹配。下次再连接这台主机，系统就会认出它的公钥已经保存在本地了，从而跳过警告部分，直接提示输入密码。
+
+这之后可以输入目标主机的目标用户的密码以完成验证的后续步骤。
+
+### Key Auth
+
+所谓"公钥登录"，原理很简单，就是用户将自己的公钥储存在远程主机上。登录的时候，远程主机会向用户发送一段随机字符串，用户用自己的私钥加密后，再发回来。远程主机用事先储存的公钥进行解密，如果成功，就证明用户是可信的，直接允许登录，不再要求密码。
+
+这里会采用非对称加密算法，即经过公钥加密的数据，无法再被公钥解密（所以即便公钥暴露也没有关系）只能被私钥解密。
+
+
+
+
+
+
+
+
+
+
+
+
