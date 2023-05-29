@@ -206,9 +206,9 @@ openssl pkcs12 -export -out localhost.p12 -name "localhost" -inkey localhost.key
 ```
 server.ssl.enabled=true
 server.ssl.key-store=/root/localhost.p12
-server.ssl.key-store-password=xavier
+server.ssl.key-store-password=bob
 server.ssl.key-alias=localhost
-server.ssl.key-password=xavier
+server.ssl.key-password=bob
 server.port=8443
 ```
 
@@ -394,16 +394,16 @@ server.ssl.valid-commonname=bob
 
 ```
 server.ssl.key-store=/root/localhost.p12
-server.ssl.key-store-password=xavier
+server.ssl.key-store-password=bob
 server.ssl.key-alias=localhost
-server.ssl.key-password=xavier
+server.ssl.key-password=bob
 server.ssl.enabled=true
 server.port=8443
 
 server.ssl.trust-store=/root/truststore.jks
-server.ssl.trust-store-password=xavier
+server.ssl.trust-store-password=${password}
 server.ssl.client-auth=need
-server.ssl.valid-commonname=xavier
+server.ssl.valid-commonname=bob
 
 logging.level.org.springframework.security=DEBUG
 ```
@@ -517,7 +517,7 @@ public class ClientConfiguration {
     @Bean
     public RestTemplate restTemplate() throws Exception {
         ClientKeyStoreInfo client = clientBob();
-        log.info("client xavier: {}", client);
+        log.info("client: {}", client);
 
         //SSL Context 是 JDK 中的东西
         final SSLContext sslContext = new SSLContextBuilder()
